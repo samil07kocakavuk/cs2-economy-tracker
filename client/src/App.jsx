@@ -249,6 +249,7 @@ function App() {
             <div>
               <p className="brand-label">Steam Profile</p>
               <strong className="brand-title">{meta?.profile?.name || 'Profil yuklenmedi'}</strong>
+              {meta?.profile?.steamId64 ? <span className="profile-id">{meta.profile.steamId64}</span> : null}
             </div>
           </div>
 
