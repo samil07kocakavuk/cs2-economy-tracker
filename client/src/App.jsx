@@ -181,6 +181,10 @@ function App() {
     });
   }
 
+  function clearSelection() {
+    setSelectedQuantities({});
+  }
+
   const groupedInventory = groupInventoryItems(inventory);
   const rarityOptions = ['all', ...new Set(groupedInventory.map((item) => item.rarity).filter(Boolean))];
 
@@ -219,6 +223,16 @@ function App() {
     (sum, item) => sum + ((selectedQuantities[item.groupKey] || 0) * (item.netPriceValue || 0)),
     0,
   );
+
+  function selectAllVisible() {
+    setSelectedQuantities((current) => {
+      const next = { ...current };
+      for (const item of visibleInventory) {
+        next[item.groupKey] = item.ownedCount;
+      }
+      return next;
+    });
+  }
 
   return (
     <div className="page-shell">
@@ -346,7 +360,15 @@ function App() {
 
           <div className="panel-meta-row">
             <span>{visibleInventory.length} farkli item gorunuyor</span>
-            {meta ? <span>Son guncelleme: {meta.fetchedAt}</span> : null}
+            <div className="panel-actions">
+              <button className="small-action" type="button" onClick={selectAllVisible} disabled={!visibleInventory.length}>
+                Gorunenleri sec
+              </button>
+              <button className="small-action" type="button" onClick={clearSelection} disabled={!selectedItemCount}>
+                Secimi temizle
+              </button>
+              {meta ? <span>Son guncelleme: {meta.fetchedAt}</span> : null}
+            </div>
           </div>
 
           <div className="inventory-grid">
@@ -433,6 +455,22 @@ function App() {
           </div>
         </section>
       </main>
+
+      <footer className="site-footer">
+        <div className="site-footer-inner">
+          <div>
+            <p className="footer-title">Steam Project</p>
+            <p className="footer-copy">CS2 inventory analysis, grouped valuation, collection tracking and liquidation planning.</p>
+          </div>
+
+          <div className="footer-links" aria-label="Footer links">
+            <span>Inventory</span>
+            <span>Sell Planner</span>
+            <span>Collections</span>
+            <span>Craft Value</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

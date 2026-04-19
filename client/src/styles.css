@@ -269,6 +269,28 @@ h1 {
   font-size: 0.95rem;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.small-action {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(152, 179, 208, 0.14);
+  border-radius: 10px;
+  background: rgba(13, 19, 29, 0.72);
+  color: #e7f0fb;
+  cursor: pointer;
+}
+
+.small-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .error-banner {
   padding: 14px 16px;
   border-radius: 14px;
@@ -483,6 +505,40 @@ h1 {
   background: rgba(9, 15, 23, 0.5);
 }
 
+.site-footer {
+  margin-top: 28px;
+  border-top: 1px solid rgba(145, 171, 211, 0.12);
+  background: rgba(8, 12, 18, 0.82);
+}
+
+.site-footer-inner {
+  width: min(1240px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 22px 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.footer-title {
+  color: #eef5ff;
+  font-weight: 700;
+}
+
+.footer-copy {
+  margin-top: 6px;
+  color: #90a4bf;
+  max-width: 640px;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #90a4bf;
+}
+
 @media (max-width: 920px) {
   .topbar-inner,
   .app-shell {
@@ -492,6 +548,7 @@ h1 {
   .topbar-inner,
   .panel-header,
   .panel-meta-row,
+  .site-footer-inner,
   .toolbar-group,
   .status-row,
   .input-row {
