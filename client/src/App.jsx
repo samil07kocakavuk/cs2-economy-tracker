@@ -331,6 +331,14 @@ function App() {
             <span className="summary-pill">Market disi adet: {unmarketableItemCount}</span>
           </div>
 
+          {selectedItemCount > 0 ? (
+            <div className="selection-highlight">
+              <strong>{selectedItemCount} item secildi</strong>
+              <span>Secili toplam: {formatTotalValue(selectedInventoryValue)}</span>
+              <span>Fee sonrasi: {formatTotalValue(selectedInventoryNet)}</span>
+            </div>
+          ) : null}
+
           {error ? <div className="error-banner">{error}</div> : null}
         </section>
 
