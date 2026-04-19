@@ -269,6 +269,24 @@ h1 {
   font-size: 0.95rem;
 }
 
+.summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.summary-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(152, 179, 208, 0.14);
+  background: rgba(14, 20, 30, 0.72);
+  color: #d9e5f5;
+}
+
 .panel-actions {
   display: flex;
   align-items: center;

@@ -215,6 +215,8 @@ function App() {
   const totalInventoryValue = groupedInventory.reduce((sum, item) => sum + ((item.priceValue || 0) * item.ownedCount), 0);
   const totalInventoryNet = groupedInventory.reduce((sum, item) => sum + ((item.netPriceValue || 0) * item.ownedCount), 0);
   const selectedItemCount = Object.values(selectedQuantities).reduce((sum, value) => sum + value, 0);
+  const marketableItemCount = groupedInventory.reduce((sum, item) => sum + (item.marketable ? item.ownedCount : 0), 0);
+  const unmarketableItemCount = groupedInventory.reduce((sum, item) => sum + (!item.marketable ? item.ownedCount : 0), 0);
   const selectedInventoryValue = groupedInventory.reduce(
     (sum, item) => sum + ((selectedQuantities[item.groupKey] || 0) * (item.priceValue || 0)),
     0,
@@ -321,6 +323,12 @@ function App() {
                 : 'Public SteamID64 gerekli'}
             </span>
             <span>{meta?.totalQuantity ? `Toplam quantity ${meta.totalQuantity}` : 'Henuz inventory yuklenmedi'}</span>
+          </div>
+
+          <div className="summary-strip">
+            <span className="summary-pill">Gruplanmis kart: {groupedInventory.length}</span>
+            <span className="summary-pill">Marketable adet: {marketableItemCount}</span>
+            <span className="summary-pill">Market disi adet: {unmarketableItemCount}</span>
           </div>
 
           {error ? <div className="error-banner">{error}</div> : null}
