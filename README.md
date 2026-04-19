@@ -7,6 +7,7 @@ Inventory-first CS2 web app built with React and Express.
 - Steam inventory lookup with `SteamID64` or `profiles/...` link
 - grouped duplicate items
 - selectable quantities with `+ / -`
+- quick selection actions for visible inventory
 - total inventory value
 - selected item value
 - estimated post-fee Steam balance
@@ -14,6 +15,8 @@ Inventory-first CS2 web app built with React and Express.
 - profile avatar and profile name header
 - rarity sorting and filtering
 - refresh inventory action
+- grouped inventory summary badges
+- footer with roadmap-oriented navigation labels
 
 ## Tech Stack
 
@@ -51,3 +54,10 @@ server/   Express backend
 ## Product Direction
 
 See `PRODUCT_DIRECTION.md` for the larger roadmap and differentiation strategy.
+
+## Recent UI Improvements
+
+- duplicate items are grouped into a single card
+- item selection is quantity based instead of binary
+- visible inventory can be selected quickly
+- grouped, marketable, and non-marketable counts are shown in the hero area
