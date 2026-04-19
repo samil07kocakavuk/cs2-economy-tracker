@@ -249,6 +249,7 @@ function App() {
             <div>
               <p className="brand-label">Steam Profile</p>
               <strong className="brand-title">{meta?.profile?.name || 'Profil yuklenmedi'}</strong>
+              {meta?.profile?.steamId64 ? <span className="profile-id">{meta.profile.steamId64}</span> : null}
             </div>
           </div>
 
@@ -330,6 +331,14 @@ function App() {
             <span className="summary-pill">Marketable adet: {marketableItemCount}</span>
             <span className="summary-pill">Market disi adet: {unmarketableItemCount}</span>
           </div>
+
+          {selectedItemCount > 0 ? (
+            <div className="selection-highlight">
+              <strong>{selectedItemCount} item secildi</strong>
+              <span>Secili toplam: {formatTotalValue(selectedInventoryValue)}</span>
+              <span>Fee sonrasi: {formatTotalValue(selectedInventoryNet)}</span>
+            </div>
+          ) : null}
 
           {error ? <div className="error-banner">{error}</div> : null}
         </section>
