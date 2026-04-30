@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
 const RARITY_ORDER = [
   "Consumer Grade", "Industrial Grade", "Mil-Spec Grade",
@@ -22,24 +22,25 @@ function nextRarity(r) {
   const i = RARITY_ORDER.indexOf(r);
   return i >= 0 && i < RARITY_ORDER.length - 1 ? RARITY_ORDER[i + 1] : null;
 }
-
-function getWear(float) {
-  return WEAR_RANGES.find(w => float >= w.min && float < w.max) || WEAR_RANGES[4];
+function getWear(f) { return WEAR_RANGES.find(w => f >= w.min && f < w.max) || WEAR_RANGES[4]; }
+function calcOutputFloat(floats, oMin, oMax) {
+  if (!floats.length) return 0;
+  const avg = floats.reduce((s, f) => s + f, 0) / floats.length;
+  return avg * (oMax - oMin) + oMin;
+}
+function marketName(weapon, skin, wear) {
+  return `${weapon} | ${skin} (${wear})`;
 }
 
-// CS2 Trade Up output float formula:
-// output_float = avg(input_floats) * (output_max - output_min) + output_min
-function calcOutputFloat(inputFloats, outputMin, outputMax) {
-  if (inputFloats.length === 0) return 0;
-  const avg = inputFloats.reduce((s, f) => s + f, 0) / inputFloats.length;
-  return avg * (outputMax - outputMin) + outputMin;
-}
+// Price cache in component
+const priceMemory = {};
 
 export default function TradeUp() {
   const [skins, setSkins] = useState([]);
   const [knives, setKnives] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [inputs, setInputs] = useState(Array(10).fill(null)); // {skin, float}
+  const [inputs, setInputs] = useState(Array(10).fill(null));
+  const [prices, setPrices] = useState({}); // {marketHashName: price}
   const [search, setSearch] = useState('');
   const [filterRarity, setFilterRarity] = useState('');
   const [filterCollection, setFilterCollection] = useState('');
@@ -55,34 +56,43 @@ export default function TradeUp() {
         if (!RARITY_ORDER.includes(rarityName)) return [];
         return skin.collections.map(col => ({
           id: skin.id, name: skin.name,
-          weapon: skin.weapon?.name || '',
-          skin: skin.pattern?.name || '',
-          rarity: rarityName,
-          rarityColor: skin.rarity.color || '',
+          weapon: skin.weapon?.name || '', skin: skin.pattern?.name || '',
+          rarity: rarityName, rarityColor: skin.rarity.color || '',
           collection: col.name, collectionId: col.id,
           image: skin.image || '',
-          minFloat: skin.min_float ?? 0,
-          maxFloat: skin.max_float ?? 1,
+          minFloat: skin.min_float ?? 0, maxFloat: skin.max_float ?? 1,
           stattrak: skin.stattrak || false
         }));
       });
       setSkins(parsed);
-
-      const knifeList = cratesData.flatMap(crate => {
-        if (!crate.contains_rare?.length) return [];
-        return crate.contains_rare.map(item => ({
+      const knifeList = cratesData.flatMap(crate =>
+        (crate.contains_rare || []).map(item => ({
           id: item.id, name: item.name,
-          weapon: item.weapon?.name || '★',
-          skin: item.pattern?.name || '',
+          weapon: item.weapon?.name || '★', skin: item.pattern?.name || '',
           rarity: 'Extraordinary', rarityColor: 'e4ae39',
           collection: crate.name, collectionId: crate.id,
           image: item.image || '',
           minFloat: item.min_float ?? 0, maxFloat: item.max_float ?? 1
-        }));
-      });
+        }))
+      );
       setKnives(knifeList);
       setLoading(false);
     }).catch(() => setLoading(false));
+  }, []);
+
+  // Fetch price for a market hash name
+  const fetchPrice = useCallback((name) => {
+    if (priceMemory[name] !== undefined) {
+      setPrices(p => ({ ...p, [name]: priceMemory[name] }));
+      return;
+    }
+    fetch(`/api/skin-price?name=${encodeURIComponent(name)}`)
+      .then(r => r.json())
+      .then(d => {
+        priceMemory[name] = d.price || 0;
+        setPrices(p => ({ ...p, [name]: d.price || 0 }));
+      })
+      .catch(() => {});
   }, []);
 
   const currentRarity = inputs.find(i => i)?.rarity || null;
@@ -104,55 +114,73 @@ export default function TradeUp() {
       if (!currentRarity && filterRarity && s.rarity !== filterRarity) return false;
       if (!currentRarity && !filterRarity && s.rarity === 'Extraordinary') return false;
       if (filterCollection && s.collectionId !== filterCollection) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        if (!`${s.weapon} ${s.skin} ${s.collection}`.toLowerCase().includes(q)) return false;
-      }
+      if (search && !`${s.weapon} ${s.skin} ${s.collection}`.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
   }, [skins, currentRarity, filterRarity, filterCollection, search]);
 
-  // Calculate outcomes with float
+  // Outcomes with float + price
   const outcomes = useMemo(() => {
     if (filledCount === 0 || !outputRarity) return [];
-
     if (currentRarity === 'Covert') {
-      if (knives.length === 0) return [{ weapon: '★ Knife / Glove', skin: 'Random', collection: 'Pool', probability: 1, rarity: 'Extraordinary', rarityColor: 'e4ae39', image: '', outputFloat: avgFloat, wear: getWear(avgFloat) }];
+      if (knives.length === 0) return [];
       const prob = 1 / Math.min(knives.length, 50);
       return knives.slice(0, 50).map(k => {
         const outFloat = calcOutputFloat(inputFloats, k.minFloat, k.maxFloat);
-        return { ...k, probability: prob, outputFloat: outFloat, wear: getWear(outFloat) };
+        const wear = getWear(outFloat);
+        const mName = marketName(k.weapon, k.skin, wear.name);
+        return { ...k, probability: prob, outputFloat: outFloat, wear, marketName: mName, price: prices[mName] ?? null };
       });
     }
-
     const weights = {};
-    for (const inp of filledInputs) {
-      weights[inp.collectionId] = (weights[inp.collectionId] || 0) + 1;
-    }
+    for (const inp of filledInputs) weights[inp.collectionId] = (weights[inp.collectionId] || 0) + 1;
     const results = [];
     for (const [colId, count] of Object.entries(weights)) {
       const outputSkins = skins.filter(s => s.collectionId === colId && s.rarity === outputRarity);
-      if (outputSkins.length === 0) continue;
+      if (!outputSkins.length) continue;
       const colProb = count / filledCount;
       const perSkin = colProb / outputSkins.length;
       for (const s of outputSkins) {
         const outFloat = calcOutputFloat(inputFloats, s.minFloat, s.maxFloat);
+        const wear = getWear(outFloat);
+        const mName = marketName(s.weapon, s.skin, wear.name);
         const existing = results.find(r => r.id === s.id && r.collectionId === s.collectionId);
         if (existing) { existing.probability += perSkin; }
-        else { results.push({ ...s, probability: perSkin, outputFloat: outFloat, wear: getWear(outFloat) }); }
+        else { results.push({ ...s, probability: perSkin, outputFloat: outFloat, wear, marketName: mName, price: prices[mName] ?? null }); }
       }
     }
     return results.sort((a, b) => b.probability - a.probability);
-  }, [filledInputs, filledCount, outputRarity, skins, currentRarity, knives, inputFloats, avgFloat]);
+  }, [filledInputs, filledCount, outputRarity, skins, currentRarity, knives, inputFloats, prices]);
+
+  // Fetch outcome prices when outcomes change
+  useEffect(() => {
+    outcomes.forEach(o => {
+      if (o.marketName && prices[o.marketName] === undefined && !priceMemory[o.marketName]) {
+        fetchPrice(o.marketName);
+      }
+    });
+  }, [outcomes, fetchPrice, prices]);
+
+  // Stats
+  const totalCost = filledInputs.reduce((s, i) => {
+    const mName = marketName(i.weapon, i.skin, getWear(i.float).name);
+    return s + (prices[mName] || 0);
+  }, 0);
+  const ev = outcomes.reduce((s, o) => s + o.probability * (o.price || 0), 0);
+  const profit = ev - totalCost;
+  const roi = totalCost > 0 ? (profit / totalCost * 100).toFixed(1) : '0.0';
+  const profitChance = outcomes.filter(o => (o.price || 0) > totalCost).reduce((s, o) => s + o.probability, 0);
 
   function addSkin(skin) {
     const idx = inputs.findIndex(i => i === null);
     if (idx === -1) return;
     const next = [...inputs];
-    // Default float: middle of skin's range
     const defaultFloat = (skin.minFloat + skin.maxFloat) / 2;
     next[idx] = { ...skin, float: defaultFloat };
     setInputs(next);
+    // Fetch input price
+    const wear = getWear(defaultFloat);
+    fetchPrice(marketName(skin.weapon, skin.skin, wear.name));
   }
 
   function updateFloat(idx, val) {
@@ -162,6 +190,8 @@ export default function TradeUp() {
     const f = Math.max(slot.minFloat, Math.min(slot.maxFloat, parseFloat(val) || 0));
     next[idx] = { ...slot, float: f };
     setInputs(next);
+    // Fetch new wear price
+    fetchPrice(marketName(slot.weapon, slot.skin, getWear(f).name));
   }
 
   function removeSkin(idx) {
@@ -173,7 +203,9 @@ export default function TradeUp() {
 
   function fillAll(skin) {
     const defaultFloat = (skin.minFloat + skin.maxFloat) / 2;
-    setInputs(inputs.map(slot => slot || { ...skin, float: defaultFloat }));
+    const filled = inputs.map(slot => slot || { ...skin, float: defaultFloat });
+    setInputs(filled);
+    fetchPrice(marketName(skin.weapon, skin.skin, getWear(defaultFloat).name));
   }
 
   function clearAll() { setInputs(Array(10).fill(null)); }
@@ -212,7 +244,7 @@ export default function TradeUp() {
             </div>
           ))}
           {filteredSkins.length === 0 && <p className="tu-empty-msg">Skin bulunamadi</p>}
-          {filteredSkins.length > 100 && <p className="tu-empty-msg">+{filteredSkins.length - 100} daha... Aramayi daralt</p>}
+          {filteredSkins.length > 100 && <p className="tu-empty-msg">+{filteredSkins.length - 100} daha...</p>}
         </div>
       </aside>
 
@@ -222,6 +254,32 @@ export default function TradeUp() {
           <button className="tu-reset-btn" onClick={clearAll}>Sifirla</button>
         </div>
 
+        {/* Stats */}
+        {filledCount > 0 && (
+          <div className="tu-stats-bar">
+            <div className="tu-stat-item">
+              <span>Toplam Maliyet</span>
+              <strong>${totalCost.toFixed(2)}</strong>
+            </div>
+            <div className="tu-stat-item">
+              <span>Expected Value</span>
+              <strong style={{ color: ev > totalCost ? '#4caf50' : '#eb4b4b' }}>${ev.toFixed(2)}</strong>
+            </div>
+            <div className="tu-stat-item">
+              <span>Kar/Zarar</span>
+              <strong style={{ color: profit >= 0 ? '#4caf50' : '#eb4b4b' }}>{profit >= 0 ? '+' : ''}${profit.toFixed(2)}</strong>
+            </div>
+            <div className="tu-stat-item">
+              <span>ROI</span>
+              <strong style={{ color: parseFloat(roi) >= 0 ? '#4caf50' : '#eb4b4b' }}>{roi}%</strong>
+            </div>
+            <div className="tu-stat-item">
+              <span>Kar Etme Ihtimali</span>
+              <strong style={{ color: profitChance > 0.5 ? '#4caf50' : '#eb4b4b' }}>{(profitChance * 100).toFixed(1)}%</strong>
+            </div>
+          </div>
+        )}
+
         {/* Inputs */}
         <div className="tu-section">
           <div className="tu-label">
@@ -230,35 +288,38 @@ export default function TradeUp() {
             {filledCount > 0 && <span className="tu-avg-float"> | Avg Float: {avgFloat.toFixed(6)}</span>}
           </div>
           <div className="tu-slots">
-            {inputs.map((slot, i) => (
-              <div key={i} className={`tu-slot ${slot ? 'filled' : 'empty'}`}
-                style={slot ? { borderBottomColor: `#${slot.rarityColor}` } : {}}>
-                {slot ? (
-                  <>
-                    <button className="tu-slot-x" onClick={() => removeSkin(i)}>×</button>
-                    {slot.image && <img className="tu-slot-img" src={slot.image} alt="" />}
-                    <span className="tu-slot-weapon">{slot.weapon}</span>
-                    <span className="tu-slot-skin">{slot.skin}</span>
-                    <div className="tu-wear-btns">
-                      {WEAR_RANGES.map(w => {
-                        const wearFloat = Math.max(slot.minFloat, Math.min(slot.maxFloat, (w.min + w.max) / 2));
-                        const possible = slot.minFloat < w.max && slot.maxFloat > w.min;
-                        return <button key={w.short} className={`tu-wear-btn ${getWear(slot.float).short === w.short ? 'active' : ''}`}
-                          disabled={!possible}
-                          onClick={() => updateFloat(i, wearFloat)}>{w.short}</button>;
-                      })}
-                    </div>
-                    <div className="tu-slot-float">
-                      <button className="tu-float-adj" onClick={() => updateFloat(i, slot.float - 0.001)}>−</button>
-                      <span className="tu-float-val">{slot.float.toFixed(4)}</span>
-                      <button className="tu-float-adj" onClick={() => updateFloat(i, slot.float + 0.001)}>+</button>
-                    </div>
-                  </>
-                ) : (
-                  <span className="tu-slot-empty">+</span>
-                )}
-              </div>
-            ))}
+            {inputs.map((slot, i) => {
+              const slotPrice = slot ? (prices[marketName(slot.weapon, slot.skin, getWear(slot.float).name)] ?? null) : null;
+              return (
+                <div key={i} className={`tu-slot ${slot ? 'filled' : 'empty'}`}
+                  style={slot ? { borderBottomColor: `#${slot.rarityColor}` } : {}}>
+                  {slot ? (
+                    <>
+                      <button className="tu-slot-x" onClick={() => removeSkin(i)}>×</button>
+                      {slot.image && <img className="tu-slot-img" src={slot.image} alt="" />}
+                      <span className="tu-slot-weapon">{slot.weapon}</span>
+                      <span className="tu-slot-skin">{slot.skin}</span>
+                      <span className="tu-slot-price">{slotPrice !== null ? `$${slotPrice.toFixed(2)}` : '...'}</span>
+                      <div className="tu-wear-btns">
+                        {WEAR_RANGES.map(w => {
+                          const wf = Math.max(slot.minFloat, Math.min(slot.maxFloat, (w.min + w.max) / 2));
+                          const possible = slot.minFloat < w.max && slot.maxFloat > w.min;
+                          return <button key={w.short} className={`tu-wear-btn ${getWear(slot.float).short === w.short ? 'active' : ''}`}
+                            disabled={!possible} onClick={() => updateFloat(i, wf)}>{w.short}</button>;
+                        })}
+                      </div>
+                      <div className="tu-slot-float">
+                        <button className="tu-float-adj" onClick={() => updateFloat(i, slot.float - 0.001)}>−</button>
+                        <span className="tu-float-val">{slot.float.toFixed(4)}</span>
+                        <button className="tu-float-adj" onClick={() => updateFloat(i, slot.float + 0.001)}>+</button>
+                      </div>
+                    </>
+                  ) : (
+                    <span className="tu-slot-empty">+</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -269,26 +330,33 @@ export default function TradeUp() {
             {outputRarity && <span style={{ color: RARITY_COLORS[outputRarity] }}> — {outputRarity === 'Extraordinary' ? '★ Knife / Glove' : outputRarity}</span>}
           </div>
           {filledCount === 0 ? (
-            <p className="tu-hint">Soldan skin ekle. 10 ayni rarity skin sec, float degerlerini ayarla → cikis float ve wear hesaplanir.</p>
+            <p className="tu-hint">Soldan skin ekle. 10 ayni rarity skin sec, float ayarla → cikis ve kar hesaplanir.</p>
           ) : outcomes.length === 0 ? (
-            <p className="tu-hint">Bu koleksiyonlarda ust tier ({outputRarity}) skin bulunamadi.</p>
+            <p className="tu-hint">Ust tier skin bulunamadi.</p>
           ) : (
             <div className="tu-outcomes">
-              {outcomes.map((o, i) => (
-                <div key={i} className="tu-outcome" style={{ borderLeftColor: `#${o.rarityColor}` }}>
-                  <div className="tu-outcome-left">
-                    {o.image && <img className="tu-outcome-img" src={o.image} alt="" loading="lazy" />}
-                    <div>
-                      <span className="tu-outcome-name">{o.weapon} | {o.skin}</span>
-                      <span className="tu-outcome-col">{o.collection}</span>
-                      <span className="tu-outcome-float">
-                        Float: {o.outputFloat.toFixed(6)} — <strong>{o.wear.name}</strong>
-                      </span>
+              {outcomes.map((o, i) => {
+                const outcomeProfit = (o.price || 0) - totalCost;
+                return (
+                  <div key={i} className="tu-outcome" style={{ borderLeftColor: `#${o.rarityColor}` }}>
+                    <div className="tu-outcome-left">
+                      {o.image && <img className="tu-outcome-img" src={o.image} alt="" loading="lazy" />}
+                      <div>
+                        <span className="tu-outcome-name">{o.weapon} | {o.skin}</span>
+                        <span className="tu-outcome-col">{o.collection}</span>
+                        <span className="tu-outcome-float">Float: {o.outputFloat.toFixed(6)} — <strong>{o.wear.name}</strong></span>
+                        <span className="tu-outcome-price">
+                          {o.price !== null ? `$${o.price.toFixed(2)}` : 'Fiyat yukleniyor...'}
+                          {o.price !== null && <span className={`tu-outcome-profit ${outcomeProfit >= 0 ? 'positive' : 'negative'}`}>
+                            {' '}({outcomeProfit >= 0 ? '+' : ''}${outcomeProfit.toFixed(2)})
+                          </span>}
+                        </span>
+                      </div>
                     </div>
+                    <div className="tu-outcome-prob">{(o.probability * 100).toFixed(1)}%</div>
                   </div>
-                  <div className="tu-outcome-prob">{(o.probability * 100).toFixed(1)}%</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

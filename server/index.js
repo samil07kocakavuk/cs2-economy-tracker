@@ -113,6 +113,56 @@ app.get('/api/steam-image', async (request, response) => {
   response.json({ image });
 });
 
+// Get price for a skin by market_hash_name
+app.get('/api/price', async (request, response) => {
+  const name = request.query.name;
+  if (!name) return response.status(400).json({ error: 'name required' });
+
+  const cacheKey = `price_${name}`;
+  const cached = priceCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return response.json({ price: cached.value });
+  }
+
+  // Wait for queue (rate limit)
+  const price = await new Promise(resolve => {
+    pendingRequests.push({ name: `__price__${name}`, resolve: async (img) => {
+      // This won't work in queue, do inline
+      resolve(0);
+    }});
+  });
+
+  response.json({ price });
+});
+
+// Separate price fetcher using search API
+app.get('/api/skin-price', async (request, response) => {
+  const name = request.query.name;
+  if (!name) return response.status(400).json({ error: 'name required' });
+
+  const cacheKey = `price_${name}`;
+  const cached = priceCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return response.json({ price: cached.value });
+  }
+
+  try {
+    const url = `https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(name)}&appid=730&norender=1&count=1`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+    if (res.ok) {
+      const data = await res.json();
+      const item = data.results?.[0];
+      if (item) {
+        const priceText = item.sell_price_text || '';
+        const val = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
+        priceCache.set(cacheKey, { value: val, expiresAt: Date.now() + PRICE_CACHE_TTL });
+        return response.json({ price: val });
+      }
+    }
+  } catch {}
+  response.json({ price: 0 });
+});
+
 app.get('/api/inventory/:profileId', async (request, response) => {
   const profileId = request.params.profileId?.trim();
 

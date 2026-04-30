@@ -798,3 +798,15 @@ h1 {
 .tu-float-input { width: 58px; padding: 0.15rem 0.25rem; border-radius: 4px; border: 1px solid #1e2d3d; background: #0d1520; color: #e8edf6; font-size: 0.65rem; text-align: center; }
 .tu-outcome-float { display: block; font-size: 0.68rem; color: #8b9bb4; margin-top: 0.15rem; }
 .tu-outcome-float strong { color: #e4ae39; }
+
+
+/* Trade Up Stats & Prices */
+.tu-stats-bar { display: flex; gap: 1rem; padding: 0.8rem 1rem; background: #141c28; border: 1px solid #1e2d3d; border-radius: 10px; margin-bottom: 1.2rem; flex-wrap: wrap; }
+.tu-stat-item { text-align: center; flex: 1; min-width: 90px; }
+.tu-stat-item span { display: block; font-size: 0.65rem; color: #5a6f87; text-transform: uppercase; margin-bottom: 0.15rem; }
+.tu-stat-item strong { font-size: 1rem; }
+.tu-slot-price { font-size: 0.65rem; color: #4caf50; font-weight: 600; margin-top: 0.1rem; }
+.tu-outcome-price { display: block; font-size: 0.75rem; color: #4caf50; margin-top: 0.1rem; }
+.tu-outcome-profit { font-weight: 700; }
+.tu-outcome-profit.positive { color: #4caf50; }
+.tu-outcome-profit.negative { color: #eb4b4b; }
