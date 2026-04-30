@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import Collections from './Collections.jsx';
+import TradeUp from './TradeUp.jsx';
 
 const SORT_OPTIONS = [
   { value: 'price-desc', label: 'Pahali -> Ucuz' },
@@ -84,6 +86,8 @@ function AttachmentSlots({ items }) {
 }
 
 function App() {
+  const [page, setPage] = useState('inventory');
+
   const [profileId, setProfileId] = useState('');
   const [inventory, setInventory] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -254,17 +258,15 @@ function App() {
           </div>
 
           <nav className="menu-strip" aria-label="Main menu">
-            <a className="menu-link is-active" href="/">
-              Inventory
-            </a>
+            <a className={`menu-link${page === 'inventory' ? ' is-active' : ''}`} href="#" onClick={(e) => { e.preventDefault(); setPage('inventory'); }}>Inventory</a>
+            <a className={`menu-link${page === 'collections' ? ' is-active' : ''}`} href="#" onClick={(e) => { e.preventDefault(); setPage('collections'); }}>Collections</a>
             <span className="menu-link">Market</span>
-            <span className="menu-link">Trade Up</span>
-            <span className="menu-link">Watchlist</span>
+            <a className={`menu-link${page === 'tradeup' ? ' is-active' : ''}`} href="#" onClick={(e) => { e.preventDefault(); setPage('tradeup'); }}>Trade Up</a>
           </nav>
         </div>
       </header>
 
-      <main className="app-shell">
+      {page === 'collections' ? <Collections /> : page === 'tradeup' ? <TradeUp /> : <main className="app-shell">
         <section className="hero-panel">
           <div className="hero-copy-block">
             <p className="eyebrow">CS2 Inventory Viewer</p>
@@ -300,20 +302,12 @@ function App() {
               <strong>{formatTotalValue(totalInventoryValue)}</strong>
             </article>
             <article className="stat-card">
-              <span>Steam fee kesildikten sonraki bakiye</span>
-              <strong>{formatTotalValue(totalInventoryNet)}</strong>
-            </article>
-            <article className="stat-card">
               <span>Secilen item adedi</span>
               <strong>{selectedItemCount}</strong>
             </article>
             <article className="stat-card">
               <span>Secili toplam deger</span>
               <strong>{formatTotalValue(selectedInventoryValue)}</strong>
-            </article>
-            <article className="stat-card">
-              <span>Secililer satilinca kalacak bakiye</span>
-              <strong>{formatTotalValue(selectedInventoryNet)}</strong>
             </article>
           </div>
 
@@ -336,7 +330,6 @@ function App() {
             <div className="selection-highlight">
               <strong>{selectedItemCount} item secildi</strong>
               <span>Secili toplam: {formatTotalValue(selectedInventoryValue)}</span>
-              <span>Fee sonrasi: {formatTotalValue(selectedInventoryNet)}</span>
             </div>
           ) : null}
 
@@ -437,9 +430,8 @@ function App() {
                       <strong>{formatPrice(item)}</strong>
                     </div>
 
-                    {item.netPrice ? <span className="price-source">Sana kalacak: {item.netPrice}</span> : null}
 
-                    <div className="quantity-picker">
+                    {item.marketable && <div className="quantity-picker">
                       <button
                         type="button"
                         className="quantity-button"
@@ -457,7 +449,7 @@ function App() {
                       >
                         +
                       </button>
-                    </div>
+                    </div>}
                   </div>
                 </article>
               );
@@ -471,7 +463,7 @@ function App() {
             ) : null}
           </div>
         </section>
-      </main>
+      </main>}
 
       <footer className="site-footer">
         <div className="site-footer-inner">

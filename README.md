@@ -1,63 +1,67 @@
-# Steam Project
+# CS2 Economy Tracker
 
-Inventory-first CS2 web app built with React and Express.
+A full-stack CS2 (Counter-Strike 2) inventory viewer, collection browser, and trade-up calculator.
 
-## Current Features
+## Features
 
-- Steam inventory lookup with `SteamID64` or `profiles/...` link
-- grouped duplicate items
-- selectable quantities with `+ / -`
-- quick selection actions for visible inventory
-- total inventory value
-- selected item value
-- estimated post-fee Steam balance
-- sticker and charm rendering when available
-- profile avatar and profile name header
-- rarity sorting and filtering
-- refresh inventory action
-- grouped inventory summary badges
-- footer with roadmap-oriented navigation labels
+### 🎒 Inventory Viewer
+- Enter any public Steam profile (SteamID64 or profile URL)
+- View all CS2 items with real-time market prices
+- Group identical items, sort by price/rarity
+- Select items and calculate total value
+- Sticker & charm detection
+
+### 📦 Collections
+- Browse all 89+ CS2 weapon collections
+- Collection icons from cs2economy CDN
+- Each collection shows items with rarity, knife type, and glove type
+- Skin images loaded from Steam CDN
+- Search and filter collections
+
+### 📈 Trade Up Calculator
+- Real skin database from ByMykel/CSGO-API (2000+ skins)
+- Accurate rarity tiers and float ranges
+- **Float system**: Set wear per input (FN/MW/FT/WW/BS buttons + fine-tune with ±)
+- **Output float calculation**: Uses CS2 formula `avg(input_floats) × (max - min) + min`
+- **Outcome probabilities**: Collection-weighted, shows exact % per possible output
+- **Covert → Knife/Glove**: Trade up from Covert skins to get knives and gloves
+- Filter by rarity, collection, search by name
 
 ## Tech Stack
 
-- React
-- Vite
-- Express
-- Steam inventory and market endpoints
+- **Frontend**: React 18 + Vite
+- **Backend**: Express.js (Node.js)
+- **Data**: ByMykel/CSGO-API, Steam Market API, cs2economy CDN
+- **Styling**: Custom CSS (dark theme)
 
-## Run Locally
+## Getting Started
 
 ```bash
+# Install dependencies
 npm install
+cd client && npm install && cd ..
+
+# Run both (backend + frontend)
 npm run dev
 ```
 
-Frontend:
-- `http://localhost:5173`
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:3001
 
-Backend:
-- `http://localhost:3001`
+## API Endpoints
 
-## Project Structure
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Health check |
+| `GET /api/inventory/:steamId64` | Fetch player inventory with prices |
+| `GET /api/collections` | List all collections |
+| `GET /api/collections/:id` | Collection detail with items |
+| `GET /api/steam-image?name=` | Proxy Steam skin images |
 
-```text
-client/   React frontend
-server/   Express backend
-```
+## Screenshots
 
-## Notes
+Trade Up Calculator with float prediction, Collections browser with real icons, Inventory viewer with market prices.
 
-- inventory must be public
-- some items are not marketable, so they do not have Steam market prices
-- net Steam balance is estimated from Steam market pricing and available sale price data
+## License
 
-## Product Direction
-
-See `PRODUCT_DIRECTION.md` for the larger roadmap and differentiation strategy.
-
-## Recent UI Improvements
-
-- duplicate items are grouped into a single card
-- item selection is quantity based instead of binary
-- visible inventory can be selected quickly
-- grouped, marketable, and non-marketable counts are shown in the hero area
+MIT

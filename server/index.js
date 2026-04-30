@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import { collections, KNIFE_TYPES, GLOVE_TYPES } from './data/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -12,6 +13,104 @@ app.use(cors());
 
 app.get('/api/health', (_request, response) => {
   response.json({ ok: true });
+});
+
+// Steam image helper
+function getSteamImageUrl(weapon, skin) {
+  const hashName = skin === 'Default' || skin === 'Vanilla'
+    ? weapon
+    : `${weapon} | ${skin} (Factory New)`;
+  return `https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXQ9QVcJY8gulRPQV6CF7b9mNvbRGJ8/360fx360f`;
+}
+
+function getMarketImageUrl(weapon, skin) {
+  const name = skin === 'Default' || skin === 'Vanilla'
+    ? encodeURIComponent(weapon)
+    : encodeURIComponent(`${weapon} | ${skin} (Factory New)`);
+  return `/api/steam-image?name=${name}`;
+}
+
+// Collections API
+app.get('/api/collections', (_request, response) => {
+  const summary = collections.map(({ id, name, itemCount, containers, priceRange, released, knife, glove, items }) => ({
+    id, name, itemCount, containers, priceRange, released, knife, glove,
+    firstItem: items[0] || null
+  }));
+  response.json(summary);
+});
+
+app.get('/api/collections/:id', (request, response) => {
+  const col = collections.find(c => c.id === request.params.id);
+  if (!col) return response.status(404).json({ error: 'Collection not found' });
+  // Add image URLs to items
+  const items = col.items.map(item => ({
+    ...item,
+    image: getMarketImageUrl(item.weapon, item.skin)
+  }));
+  response.json({ ...col, items });
+});
+
+app.get('/api/knives', (_request, response) => {
+  response.json({ types: KNIFE_TYPES, gloves: GLOVE_TYPES });
+});
+
+// Proxy Steam market images with rate limiting
+const imageCache = new Map();
+let lastFetch = 0;
+const FETCH_DELAY = 1200; // ms between requests to avoid rate limit
+const pendingRequests = [];
+let processing = false;
+
+async function processQueue() {
+  if (processing) return;
+  processing = true;
+  while (pendingRequests.length > 0) {
+    const { name, resolve } = pendingRequests.shift();
+    const cached = imageCache.get(name);
+    if (cached !== undefined) { resolve(cached); continue; }
+
+    const wait = Math.max(0, FETCH_DELAY - (Date.now() - lastFetch));
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    lastFetch = Date.now();
+
+    try {
+      const url = `https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(name)}&appid=730&norender=1&count=1`;
+      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+      if (res.ok) {
+        const data = await res.json();
+        const item = data.results?.[0];
+        if (item?.asset_description?.icon_url) {
+          const img = `https://community.cloudflare.steamstatic.com/economy/image/${item.asset_description.icon_url}/360fx360f`;
+          imageCache.set(name, img);
+          resolve(img);
+          continue;
+        }
+      }
+      if (res.status === 429) {
+        // Rate limited - wait longer and retry
+        await new Promise(r => setTimeout(r, 5000));
+        pendingRequests.unshift({ name, resolve });
+        continue;
+      }
+    } catch {}
+    imageCache.set(name, '');
+    resolve('');
+  }
+  processing = false;
+}
+
+app.get('/api/steam-image', async (request, response) => {
+  const name = request.query.name;
+  if (!name) return response.status(400).json({ error: 'name required' });
+
+  const cached = imageCache.get(name);
+  if (cached !== undefined) return response.json({ image: cached });
+
+  const image = await new Promise(resolve => {
+    pendingRequests.push({ name, resolve });
+    processQueue();
+  });
+  response.json({ image });
 });
 
 app.get('/api/inventory/:profileId', async (request, response) => {
@@ -538,8 +637,11 @@ function estimateNetPrice(priceValue) {
   if (!Number.isFinite(priceValue)) {
     return null;
   }
-
-  return Number((priceValue / 1.15).toFixed(2));
+  // Steam fee: floor(price * 0.05), min $0.01
+  // CS2 game fee: floor(price * 0.10), min $0.01
+  const steamFee = Math.max(0.01, Math.floor(priceValue * 0.05 * 100) / 100);
+  const gameFee = Math.max(0.01, Math.floor(priceValue * 0.10 * 100) / 100);
+  return Number((priceValue - steamFee - gameFee).toFixed(2));
 }
 
 function formatUsd(value) {
